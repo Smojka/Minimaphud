@@ -1,0 +1,401 @@
+ [ComponentEditorProps(category: "GameScripted/AI", description: "Component for AI checking state of characters")]
+ class SCR_AIInfoComponentClass : SCR_AIInfoBaseComponentClass
+ {
+ }
+
+ enum EUnitRole
+ {
+     NONE                = 0,
+     RIFLEMAN            = 1,
+     MEDIC               = 2,
+     MACHINEGUNNER       = 4,
+     AT_SPECIALIST       = 8,
+     GRENADIER           = 16,
+     SNIPER              = 32,
+     HAS_SMOKE_GRENADE   = 64,
+     HAS_FRAG_GRENADE    = 128
+ }
+
+ enum EUnitState
+ {
+     NONE            = 0,
+     WOUNDED         = 1,
+     IN_TURRET       = 2,
+     IN_VEHICLE      = 4,
+     UNCONSCIOUS     = 8
+ }
+
+ enum EUnitAIState
+ {
+     AVAILABLE,
+     BUSY,
+     UNRESPONSIVE,
+ }
+
+ class SCR_AIInfoComponent : SCR_AIInfoBaseComponent
+ {
+     protected EUnitState m_iUnitStates;
+     protected EUnitAIState m_iAIStates;
+     protected SCR_InventoryStorageManagerComponent m_inventoryManagerComponent;
+     protected BaseWeaponManagerComponent m_weaponManagerComponent;
+     protected SCR_CompartmentAccessComponent m_CompartmentAccessComponent;
+     protected SCR_AIThreatSystem m_ThreatSystem;
+     protected SCR_CharacterDamageManagerComponent m_DamageManager;
+     protected SCR_AICombatComponent m_CombatComponent;
+     protected SCR_CharacterControllerComponent m_CharacterController;
+     PerceptionComponent m_Perception;
+
+     protected SCR_CharacterBloodHitZone m_BloodHitZone;
+     protected float m_fUnconsciousBloodLevel;
+
+     protected ECharacterStance m_eStance;
+     protected EMovementType m_eMovementType;
+     protected bool m_bWeaponRaised;
+     protected int m_iAttackCount;
+     protected int m_unitID;
+
+     //------------------------------------------------------------------------------------------------
+     override protected void OnPostInit(IEntity owner)
+     {
+         super.OnPostInit(owner);
+         SetEventMask(owner, EntityEvent.INIT);
+     }
+
+     //------------------------------------------------------------------------------------------------
+  void OnVehicleEntered( IEntity vehicle, BaseCompartmentManagerComponent manager, int mgrID, int slotID )
+     {
+         BaseCompartmentSlot compSlot = manager.FindCompartment(slotID, mgrID);
+         if (TurretCompartmentSlot.Cast(compSlot))
+             AddUnitState(EUnitState.IN_TURRET);
+     }
+
+     //------------------------------------------------------------------------------------------------
+  void OnVehicleLeft( IEntity vehicle, BaseCompartmentManagerComponent manager, int mgrID, int slotID )
+     {
+         auto aiworld = SCR_AIWorld.Cast(GetGame().GetAIWorld());
+         if (!aiworld)
+             return;
+         BaseCompartmentSlot compSlot = manager.FindCompartment(slotID, mgrID);
+         if (!TurretCompartmentSlot.Cast(compSlot))
+             return;
+
+         RemoveUnitState(EUnitState.IN_TURRET);
+     }
+
+
+     //------------------------------------------------------------------------------------------------
+  void InitBloodLevel()
+     {
+         m_BloodHitZone = SCR_CharacterBloodHitZone.Cast(m_DamageManager.GetBloodHitZone());
+         if (m_BloodHitZone)
+             m_fUnconsciousBloodLevel = m_BloodHitZone.GetMaxHealth() * m_BloodHitZone.GetDamageStateThreshold(EDamageState.STATE3);
+     }
+
+     //------------------------------------------------------------------------------------------------
+     override protected void EOnInit(IEntity owner)
+     {
+         IEntity ent = owner;
+         AIAgent agent = AIAgent.Cast(owner);
+         if (agent)
+             ent = agent.GetControlledEntity();
+
+         if (ent)
+         {
+             m_inventoryManagerComponent = SCR_InventoryStorageManagerComponent.Cast(ent.FindComponent(SCR_InventoryStorageManagerComponent));
+             m_weaponManagerComponent = BaseWeaponManagerComponent.Cast(ent.FindComponent(BaseWeaponManagerComponent));
+             m_CompartmentAccessComponent = SCR_CompartmentAccessComponent.Cast(ent.FindComponent(SCR_CompartmentAccessComponent));
+             m_DamageManager = SCR_CharacterDamageManagerComponent.Cast(ent.FindComponent(SCR_CharacterDamageManagerComponent));
+             m_CombatComponent = SCR_AICombatComponent.Cast(ent.FindComponent(SCR_AICombatComponent));
+
+             m_CharacterController = SCR_CharacterControllerComponent.Cast(ent.FindComponent(SCR_CharacterControllerComponent));
+             if (m_CharacterController)
+                 m_CharacterController.m_OnLifeStateChanged.Insert(OnLifeStateChanged);
+
+             m_Perception = PerceptionComponent.Cast(ent.FindComponent(PerceptionComponent));
+         }
+
+         if (m_CompartmentAccessComponent)
+         {
+             m_CompartmentAccessComponent.GetOnCompartmentEntered().Insert(OnVehicleEntered);
+             m_CompartmentAccessComponent.GetOnCompartmentLeft().Insert(OnVehicleLeft);
+         }
+
+         if (m_DamageManager)
+         {
+             InitBloodLevel();
+             m_DamageManager.GetOnDamageOverTimeAdded().Insert(OnDamageOverTimeAdded);
+             m_DamageManager.GetOnDamageOverTimeRemoved().Insert(OnDamageOverTimeRemoved);
+             EvaluateWoundedState();
+         }
+     }
+
+     //------------------------------------------------------------------------------------------------
+     // destructor
+     void ~SCR_AIInfoComponent()
+     {
+         if (m_CharacterController)
+             m_CharacterController.m_OnLifeStateChanged.Remove(OnLifeStateChanged);
+     }
+
+     //------------------------------------------------------------------------------------------------
+     override protected void OnDelete(IEntity owner)
+     {
+         if (m_CompartmentAccessComponent)
+         {
+             m_CompartmentAccessComponent.GetOnCompartmentEntered().Remove(OnVehicleEntered);
+             m_CompartmentAccessComponent.GetOnCompartmentLeft().Remove(OnVehicleLeft);
+         }
+
+         if (m_DamageManager)
+         {
+             m_DamageManager.GetOnDamageOverTimeAdded().Remove(OnDamageOverTimeAdded);
+             m_DamageManager.GetOnDamageOverTimeRemoved().Remove(OnDamageOverTimeRemoved);
+         }
+     }
+
+     //------------------------------------------------------------------------------------------------
+  bool IsOwnerAgent(AIAgent agent)
+     {
+         return GetOwner() == agent;
+     }
+
+ //----------- BIT operations on Roles
+
+     //------------------------------------------------------------------------------------------------
+  bool HasRole(EUnitRole role)
+     {
+         switch (role)
+         {
+             case EUnitRole.MEDIC:               return m_inventoryManagerComponent.GetHealthComponentCount() > 0;
+             case EUnitRole.MACHINEGUNNER:       return m_CombatComponent.HasWeaponOfType(EWeaponType.WT_MACHINEGUN);
+             case EUnitRole.RIFLEMAN:            return m_CombatComponent.HasWeaponOfType(EWeaponType.WT_RIFLE);
+             case EUnitRole.AT_SPECIALIST:       return m_CombatComponent.HasWeaponOfType(EWeaponType.WT_ROCKETLAUNCHER);
+             case EUnitRole.GRENADIER:           return m_CombatComponent.HasWeaponOfType(EWeaponType.WT_GRENADELAUNCHER); // todo right now it will not detect a UGL muzzle, because weapon type is still rifle
+             case EUnitRole.SNIPER:          return m_CombatComponent.HasWeaponOfType(EWeaponType.WT_SNIPERRIFLE);
+             case EUnitRole.HAS_SMOKE_GRENADE:   return m_CombatComponent.HasWeaponOfType(EWeaponType.WT_SMOKEGRENADE);
+             case EUnitRole.HAS_FRAG_GRENADE:    return m_CombatComponent.HasWeaponOfType(EWeaponType.WT_FRAGGRENADE);
+         }
+
+         return false;
+     }
+
+     //------------------------------------------------------------------------------------------------
+     EUnitRole GetRoles()
+     {
+         typename t = EUnitRole;
+         int tVarCount = t.GetVariableCount();
+         EUnitRole roles = 0;
+         for (int i = 0; i < tVarCount; i++)
+         {
+             EUnitRole flag;
+             t.GetVariableValue(null, i, flag);
+             if (flag && HasRole(flag))
+                 roles |= flag;
+         }
+         return roles;
+     }
+
+ //---------- BIT operation on States
+
+     //------------------------------------------------------------------------------------------------
+  void AddUnitState(EUnitState state)
+     {
+         m_iUnitStates = m_iUnitStates | state;
+     }
+
+     //------------------------------------------------------------------------------------------------
+  void RemoveUnitState(EUnitState state)
+     {
+         if (HasUnitState(state))
+             m_iUnitStates = m_iUnitStates & ~state;
+     }
+
+     //------------------------------------------------------------------------------------------------
+  bool HasUnitState(EUnitState state)
+     {
+         return ( m_iUnitStates & state );
+     }
+
+     //------------------------------------------------------------------------------------------------
+     EUnitState GetUnitStates()
+     {
+         return m_iUnitStates;
+     }
+
+ //--------- AI states are disjoined - one can be in only one state at the time
+
+     //------------------------------------------------------------------------------------------------
+  void SetAIState(EUnitAIState state)
+     {
+         m_iAIStates = state;
+     }
+
+     //------------------------------------------------------------------------------------------------
+     EUnitAIState GetAIState()
+     {
+         return m_iAIStates;
+     }
+
+ //--------  Info about magazines available to SCR_AIResupplyActivity
+
+     //------------------------------------------------------------------------------------------------
+  int GetMagazineCountByWellType(typename magazinyWellType)
+     {
+         return m_CombatComponent.GetMagazineCount(magazinyWellType, false);
+     }
+
+ //--------  Set or get AI stance, speed, raising weapon etc.
+
+     //------------------------------------------------------------------------------------------------
+  void SetStance(ECharacterStance stance)
+     {
+         m_eStance = stance;
+     }
+
+     //------------------------------------------------------------------------------------------------
+  ECharacterStance GetStance()
+     {
+         return m_eStance;
+     }
+
+     //------------------------------------------------------------------------------------------------
+  void SetMovementType(EMovementType mode)
+     {
+         m_eMovementType = mode;
+     }
+
+     //------------------------------------------------------------------------------------------------
+  EMovementType GetMovementType()
+     {
+         return m_eMovementType;
+     }
+
+     //------------------------------------------------------------------------------------------------
+  void SetWeaponRaised(bool raised)
+     {
+         m_bWeaponRaised = raised;
+     }
+
+     //------------------------------------------------------------------------------------------------
+  bool GetWeaponRaised()
+     {
+         return m_bWeaponRaised;
+     }
+
+     //------------------------------------------------------------------------------------------------
+  void InitThreatSystem(SCR_AIThreatSystem threatSystem)
+     {
+         m_ThreatSystem = threatSystem;
+     }
+
+     //------------------------------------------------------------------------------------------------
+     EAIThreatState GetThreatState()
+     {
+         if (m_ThreatSystem)
+             return m_ThreatSystem.GetState();
+         else
+             return EAIThreatState.SAFE;
+     }
+
+     //------------------------------------------------------------------------------------------------
+  SCR_AIThreatSystem GetThreatSystem()
+     {
+         return m_ThreatSystem;
+     }
+
+ //--------  Evaluation of wounded state of AI
+
+     //------------------------------------------------------------------------------------------------
+  protected void EvaluateWoundedState()
+     {
+         bool wounded = m_DamageManager.IsDamagedOverTime(EDamageType.BLEEDING);
+         if (wounded)
+             AddUnitState(EUnitState.WOUNDED);
+         else
+             RemoveUnitState(EUnitState.WOUNDED);
+     }
+
+     //------------------------------------------------------------------------------------------------
+     protected void OnDamageOverTimeAdded(EDamageType dType, float dps, HitZone hz)
+     {
+         if (dType != EDamageType.BLEEDING)
+             return;
+
+         EvaluateWoundedState();
+     }
+
+     //------------------------------------------------------------------------------------------------
+     protected void OnDamageOverTimeRemoved(EDamageType dType, HitZone hz)
+     {
+         if (dType != EDamageType.BLEEDING)
+             return;
+
+         EvaluateWoundedState();
+     }
+
+     //------------------------------------------------------------------------------------------------
+  void OnLifeStateChanged(ECharacterLifeState previousLifeState, ECharacterLifeState newLifeState)
+     {
+         if (newLifeState != ECharacterLifeState.INCAPACITATED)
+             RemoveUnitState(EUnitState.UNCONSCIOUS);
+         else
+             AddUnitState(EUnitState.UNCONSCIOUS);
+     }
+
+     //------------------------------------------------------------------------------------------------
+  float GetBleedTimeToUnconscious()
+     {
+         if (!m_BloodHitZone || !m_fUnconsciousBloodLevel)
+             return -1;
+
+         float bleedingPerSec = m_BloodHitZone.GetDamageOverTime(EDamageType.BLEEDING);
+
+         float timeToUnconscious = -1;
+
+         if (bleedingPerSec > 0)
+             timeToUnconscious = (m_BloodHitZone.GetHealth() - m_fUnconsciousBloodLevel) / bleedingPerSec;
+
+         return timeToUnconscious;
+     }
+
+ //-------- Debugging
+
+     //------------------------------------------------------------------------------------------------
+  // Used in SCR_AIDebugInfoComponent
+     void DebugPrintToWidget(TextWidget w)
+     {
+         string str;
+         str = str + string.Format("\n%1 %2", m_iAIStates, typename.EnumToString(EUnitAIState, m_iAIStates));
+         w.SetText(str);
+     }
+
+     //------------------------------------------------------------------------------------------------
+  string GetBehaviorEditorDebugName()
+     {
+         AIAgent agent = AIAgent.Cast(GetOwner());
+
+         SCR_CallsignCharacterComponent callsignComp = SCR_CallsignCharacterComponent.Cast(agent.GetControlledEntity().FindComponent(SCR_CallsignCharacterComponent));
+
+         FactionAffiliationComponent factionComp = FactionAffiliationComponent.Cast(agent.GetControlledEntity().FindComponent(FactionAffiliationComponent));
+
+         string str;
+
+         if (factionComp)
+         {
+             string faction = factionComp.GetAffiliatedFaction().GetFactionKey();
+             str = str + string.Format("[%1] ", faction);
+         }
+
+         if (callsignComp)
+         {
+             string company, platoon, squad, character, format;
+             bool setCallsign = callsignComp.GetCallsignNames(company, platoon, squad, character, format);
+             if (setCallsign)
+             {
+                 string callsign = WidgetManager.Translate(format, company, platoon, squad, character);
+                 str = str + string.Format(" %1", callsign);
+             }
+         }
+         return str;
+     }
+ }

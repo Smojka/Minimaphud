@@ -1,0 +1,11 @@
+ class SCR_WallGeneratorPoint
+ {
+     vector m_vPos;
+     ResourceName m_sCustomMesh;
+     float m_fPrePadding;
+     float m_fPostPadding;
+     bool m_bGenerate;
+     bool m_bAlignNext;
+     bool m_bClip;
+     float m_fOffsetUp;
+ }

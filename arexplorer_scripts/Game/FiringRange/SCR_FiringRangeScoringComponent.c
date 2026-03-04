@@ -1,0 +1,157 @@
+ [EntityEditorProps(category: "GameScripted/FiringRange", description: "Handles Score on Firing Range.", color: "0 0 255 255")]
+ class SCR_FiringRangeScoringComponentClass : SCR_BaseGameModeComponentClass
+ {
+ }
+
+ class SCR_FiringRangeScoringComponent : SCR_BaseGameModeComponent
+ {
+     SCR_FiringRangeManager s_Manager;
+
+     [RplProp()]
+     protected ref array<ref SCR_PlayerScoreInfoFiringRange> m_aAllPlayersInfo = {};
+
+     //------------------------------------------------------------------------------------------------
+  void OnDisconnected(int playerID)
+     {
+         RemovePlayer(playerID);
+
+         // Remove player from assigned firing line
+         s_Manager.RemoveAssignedPlayerFromFireline(playerID);
+
+         ClearScore(playerID);
+         // If player is in Firing line area and has his line in scoreborad, remove him from it.
+         if (s_Manager.IsPlayerInFiringRangeArea(playerID))
+             s_Manager.RemovePlayerFromArea(playerID);
+
+     }
+
+     //------------------------------------------------------------------------------------------------
+  void OnKill(int playerId, IEntity playerEntity, IEntity killerEntity, notnull Instigator killer)
+     {
+         // Remove player from assigned firing line
+         s_Manager.RemoveAssignedPlayerFromFireline(playerId);
+
+         ClearScore(playerId);
+         // If player is in Firing line area and has his line in scoreborad, remove him from it.
+         if (s_Manager.IsPlayerInFiringRangeArea(playerId))
+             s_Manager.RemovePlayerFromArea(playerId);
+     }
+
+     //------------------------------------------------------------------------------------------------
+  SCR_PlayerScoreInfoFiringRange AddPlayer(int playerID)
+     {
+         SCR_PlayerScoreInfoFiringRange playerInfo = new SCR_PlayerScoreInfoFiringRange();
+         playerInfo.m_iID = playerID;
+         m_aAllPlayersInfo.Insert(playerInfo);
+         Replication.BumpMe();
+
+         return playerInfo;
+     }
+
+     //------------------------------------------------------------------------------------------------
+  void RemovePlayer(int playerID)
+     {
+         m_aAllPlayersInfo.RemoveItem(GetPlayerScoreInfo(playerID));
+         Replication.BumpMe();
+     }
+
+     //------------------------------------------------------------------------------------------------
+  void ClearScore(int playerID)
+     {
+         SCR_PlayerScoreInfoFiringRange playerScoreInfoFiringRange = GetPlayerScoreInfo(playerID);
+         if (playerScoreInfoFiringRange)
+             playerScoreInfoFiringRange.Clear();
+     }
+
+     //------------------------------------------------------------------------------------------------
+  void AddScore(int playerID, int scorePoints)
+     {
+         SCR_PlayerScoreInfoFiringRange playerScoreInfoFiringRange = GetPlayerScoreInfo(playerID);
+         if (playerScoreInfoFiringRange)
+             playerScoreInfoFiringRange.m_iScore = playerScoreInfoFiringRange.GetScore() + scorePoints;
+     }
+
+     //------------------------------------------------------------------------------------------------
+  void SetScoreMax(int playerID, int scorePointsMax)
+     {
+         SCR_PlayerScoreInfoFiringRange playerScoreInfoFiringRange = GetPlayerScoreInfo(playerID);
+         if (playerScoreInfoFiringRange)
+             playerScoreInfoFiringRange.m_iScoreMax = scorePointsMax;
+     }
+
+     //------------------------------------------------------------------------------------------------
+  int GetScore(int playerID)
+     {
+         SCR_PlayerScoreInfoFiringRange playerScoreInfoFiringRange = GetPlayerScoreInfo(playerID);
+         if (playerScoreInfoFiringRange)
+             return playerScoreInfoFiringRange.GetScore();
+         else return 0;
+     }
+
+     //------------------------------------------------------------------------------------------------
+  int GetPlayersCount()
+     {
+         return m_aAllPlayersInfo.Count();
+     }
+
+     //------------------------------------------------------------------------------------------------
+  private SCR_PlayerScoreInfoFiringRange GetPlayerScoreInfo(int playerID)
+     {
+         for (int i = 0, count = m_aAllPlayersInfo.Count(); i < count; i++)
+         {
+             if (m_aAllPlayersInfo[i].m_iID == playerID)
+                 return m_aAllPlayersInfo[i];
+         }
+
+         return null;
+     }
+
+     //------------------------------------------------------------------------------------------------
+  int GetAllPlayersScoreInfo(notnull out array<SCR_PlayerScoreInfoFiringRange> output)
+     {
+         output.Clear();
+         int y = 0;
+
+         for (int i = 0, count = m_aAllPlayersInfo.Count(); i < count; i++)
+         {
+             output.Insert(m_aAllPlayersInfo[i]);
+             Replication.BumpMe();
+             y++;
+         }
+
+         return y;
+     }
+
+     //------------------------------------------------------------------------------------------------
+     override void OnPostInit(IEntity owner)
+     {
+         SetEventMask(owner, EntityEvent.INIT);
+     }
+
+     //------------------------------------------------------------------------------------------------
+     override void EOnInit(IEntity owner)
+     {
+         SCR_BaseGameMode gameMode = SCR_BaseGameMode.Cast(GetGame().GetGameMode());
+         if (!gameMode)
+             return;
+
+         gameMode.GetOnPlayerConnected().Insert(AddPlayer);
+         gameMode.GetOnPlayerDisconnected().Insert(OnDisconnected);
+         gameMode.GetOnPlayerKilled().Insert(OnKill);
+
+         array<int> playerIds = {};
+         GetGame().GetPlayerManager().GetPlayers(playerIds);
+
+         foreach (int id : playerIds)
+         {
+             AddPlayer(id);
+         }
+     }
+
+     //------------------------------------------------------------------------------------------------
+     // constructor
+  void SCR_FiringRangeScoringComponent(IEntityComponentSource src, IEntity ent, IEntity parent)
+     {
+         s_Manager = SCR_FiringRangeManager.Cast(ent);
+     }
+ }

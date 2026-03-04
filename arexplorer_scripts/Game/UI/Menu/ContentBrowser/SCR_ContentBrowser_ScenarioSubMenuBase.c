@@ -1,0 +1,546 @@
+ /*
+ Sub menu base for handlign scenario lines.
+ */
+
+ class SCR_ContentBrowser_ScenarioSubMenuBase : SCR_SubMenuBase
+ {
+     protected ref array<SCR_ContentBrowser_ScenarioLineComponent> m_aScenarioLines = {};
+
+     protected SCR_ContentBrowser_ScenarioLineComponent m_SelectedLine;
+     protected SCR_ContentBrowser_ScenarioLineComponent m_LastSelectedLine;
+
+     protected MissionWorkshopItem m_SelectedScenario;
+     protected ref SCR_MissionHeader m_Header;
+
+     protected SCR_ScenarioDetailsPanelComponent m_ScenarioDetailsPanel;
+
+     // Line Actions
+     protected EInputDeviceType m_eLastInputType;
+     protected bool m_bWasLineSelected;
+     protected SCR_ContentBrowser_ScenarioLineComponent m_ClickedLine; // Cache last clicked line to trigger the correct dialog after the double click window
+
+     protected SCR_MenuActionsComponent m_ActionsComponent;
+
+     // Nav buttons
+     protected SCR_InputButtonComponent m_NavPlay;
+     protected SCR_InputButtonComponent m_NavContinue;
+     protected SCR_InputButtonComponent m_NavRestart;
+     protected SCR_InputButtonComponent m_NavHost;
+     protected SCR_InputButtonComponent m_NavFindServers;
+     protected SCR_InputButtonComponent m_NavFavorite;
+     protected ref array<SCR_InputButtonComponent> m_aRightFooterButtons = {};
+
+     // Invokers
+     protected ref ScriptInvokerBool m_OnLineFavorite;
+
+     protected bool m_bIsListeningForCommStatus;
+     protected WorkshopApi m_WorkshopApi;
+
+     //------------------------------------------------------------------------------------------------
+     override void HandlerAttached(Widget w)
+     {
+         super.HandlerAttached(w);
+         InitWidgets();
+     }
+
+     //------------------------------------------------------------------------------------------------
+     override void OnTabCreate(Widget menuRoot, ResourceName buttonsLayout, int index)
+     {
+         super.OnTabCreate(menuRoot, buttonsLayout, index);
+
+         // Listen for Actions
+         m_ActionsComponent = SCR_MenuActionsComponent.FindComponent(GetRootWidget());
+         if (m_ActionsComponent)
+             m_ActionsComponent.GetOnAction().Insert(OnActionTriggered);
+
+         // Right footer buttons
+         // These are visible when using keyboard / gamepad and focusing a line
+         m_DynamicFooter.GetOnButtonActivated().Insert(OnInteractionButtonPressed);
+
+         m_NavPlay = m_DynamicFooter.FindButton(SCR_ScenarioEntryHelper.BUTTON_PLAY);
+         m_NavContinue = m_DynamicFooter.FindButton(SCR_ScenarioEntryHelper.BUTTON_CONTINUE);
+         m_NavRestart = m_DynamicFooter.FindButton(SCR_ScenarioEntryHelper.BUTTON_RESTART);
+         m_NavHost = m_DynamicFooter.FindButton(SCR_ScenarioEntryHelper.BUTTON_HOST);
+         m_NavFindServers = m_DynamicFooter.FindButton(SCR_ScenarioEntryHelper.BUTTON_FIND_SERVERS);
+         m_NavFavorite = m_DynamicFooter.FindButton(SCR_ScenarioEntryHelper.BUTTON_FAVORITE);
+
+         m_aRightFooterButtons = m_DynamicFooter.GetButtonsInFooter(SCR_EDynamicFooterButtonAlignment.RIGHT);
+
+         UpdateNavigationButtons();
+
+         // Backend
+         m_WorkshopApi = GetGame().GetBackendApi().GetWorkshop();
+
+         InitWorkshopApi()
+     }
+
+     //------------------------------------------------------------------------------------------------
+     override void OnMenuUpdate(float tDelta)
+     {
+         super.OnMenuUpdate(tDelta);
+
+         MissionWorkshopItem selectedMission = GetSelectedScenario();
+         if (selectedMission && m_SelectedScenario != selectedMission)
+         {
+             m_SelectedScenario = selectedMission;
+             m_Header = SCR_MissionHeader.Cast(MissionHeader.ReadMissionHeader(selectedMission.Id()));
+         }
+
+         EInputDeviceType inputDeviceType = GetGame().GetInputManager().GetLastUsedInputDevice();
+         bool isLineSelected = GetSelectedLine();
+         bool shouldUpdateButtons = inputDeviceType != m_eLastInputType || isLineSelected != m_bWasLineSelected;
+
+         if (shouldUpdateButtons)
+             UpdateNavigationButtons();
+
+         m_eLastInputType = inputDeviceType;
+         m_bWasLineSelected = isLineSelected;
+     }
+
+     //------------------------------------------------------------------------------------------------
+     override void OnTabShow()
+     {
+         super.OnTabShow();
+
+         SCR_ServicesStatusHelper.RefreshPing();
+
+         if (!m_bIsListeningForCommStatus)
+             SCR_ServicesStatusHelper.GetOnCommStatusCheckFinished().Insert(OnCommStatusCheckFinished);
+
+         m_bIsListeningForCommStatus = true;
+
+         if (m_ActionsComponent)
+             m_ActionsComponent.ActivateActions();
+     }
+
+     //------------------------------------------------------------------------------------------------
+     override void OnTabHide()
+     {
+         super.OnTabHide();
+
+         UpdateNavigationButtons(false);
+
+         SCR_ServicesStatusHelper.GetOnCommStatusCheckFinished().Remove(OnCommStatusCheckFinished);
+         m_bIsListeningForCommStatus = false;
+     }
+
+     //------------------------------------------------------------------------------------------------
+     override void OnMenuFocusGained()
+     {
+         super.OnMenuFocusGained();
+
+         SCR_ServicesStatusHelper.RefreshPing();
+
+         UpdateNavigationButtons();
+
+         if (m_bShown && m_ActionsComponent)
+             m_ActionsComponent.ActivateActions();
+     }
+
+     //------------------------------------------------------------------------------------------------
+     override void OnMenuShow()
+     {
+         super.OnMenuShow();
+
+         if (m_bShown && m_ActionsComponent)
+             m_ActionsComponent.ActivateActions();
+     }
+
+     // ---- EVENTS ----
+     //------------------------------------------------------------------------------------------------
+     protected void OnCommStatusCheckFinished(SCR_ECommStatus status, float responseTime, float lastSuccessTime, float lastFailTime)
+     {
+         UpdateNavigationButtons();
+     }
+
+     //------------------------------------------------------------------------------------------------
+     protected void OnLineFocus(SCR_ScriptedWidgetComponent entry)
+     {
+         SCR_ContentBrowser_ScenarioLineComponent lineComp = SCR_ContentBrowser_ScenarioLineComponent.Cast(entry);
+
+         m_SelectedLine = lineComp;
+         m_SelectedLine.m_OnClick.Insert(OnLineMouseClick);
+
+         UpdateNavigationButtons();
+         UpdateSidePanel();
+     }
+
+     //------------------------------------------------------------------------------------------------
+     protected void OnLineFocusLost(SCR_ScriptedWidgetComponent entry)
+     {
+         m_LastSelectedLine = m_SelectedLine;
+         m_SelectedLine.m_OnClick.Remove(OnLineMouseClick);
+
+         UpdateSidePanel();
+     }
+
+     //------------------------------------------------------------------------------------------------
+     protected void OnLineMouseClick(SCR_ScriptedWidgetComponent button)
+     {
+         m_ClickedLine = SCR_ContentBrowser_ScenarioLineComponent.Cast(button);
+     }
+
+     //------------------------------------------------------------------------------------------------
+     protected void OnLineFavorite(SCR_ListMenuEntryComponent entry, bool favorite)
+     {
+         OnScenarioStateChanged(SCR_ContentBrowser_ScenarioLineComponent.Cast(entry));
+     }
+
+     //------------------------------------------------------------------------------------------------
+  protected void OnScenarioStateChanged(SCR_ContentBrowser_ScenarioLineComponent comp)
+     {
+         UpdateSidePanel();
+     }
+
+     // ---- INPUTS ----
+     // SWITCHES
+     //------------------------------------------------------------------------------------------------
+     protected void OnActionTriggered(string action, float multiplier)
+     {
+         if (GetGame().GetInputManager().GetLastUsedInputDevice() != EInputDeviceType.MOUSE)
+             return;
+
+         MissionWorkshopItem scenario = GetSelectedScenario();
+         if (!SCR_ScenarioEntryHelper.IsReady(scenario) && action != SCR_ScenarioEntryHelper.ACTION_DOUBLE_CLICK)
+             return;
+
+         switch (action)
+         {
+             case SCR_ScenarioEntryHelper.ACTION_DOUBLE_CLICK:   OnLineClickInteraction(multiplier); break;
+             case SCR_ScenarioEntryHelper.ACTION_RESTART:        Restart(scenario); break;
+             case SCR_ScenarioEntryHelper.ACTION_FIND_SERVERS:   Join(scenario); break;
+             case SCR_ScenarioEntryHelper.ACTION_FAVORITE:       OnFavouriteButton(); break;
+             case SCR_ScenarioEntryHelper.ACTION_HOST:
+             {
+                 if (!GetGame().IsPlatformGameConsole())
+                     Host(scenario);
+                 break;
+             }
+         }
+     }
+
+     //------------------------------------------------------------------------------------------------
+     protected void OnInteractionButtonPressed(string action)
+     {
+         SwitchOnButton(action, GetSelectedScenario());
+     }
+
+     //------------------------------------------------------------------------------------------------
+     protected void OnConfirmationDialogButtonPressed(SCR_ScenarioConfirmationDialogUi dialog, string tag)
+     {
+         if (!dialog)
+             return;
+
+         SwitchOnButton(tag, dialog.GetScenario());
+     }
+
+     //------------------------------------------------------------------------------------------------
+     protected void SwitchOnButton(string tag, MissionWorkshopItem scenario)
+     {
+         if (!SCR_ScenarioEntryHelper.IsReady(scenario))
+             return;
+
+         switch (tag)
+         {
+             case SCR_ConfigurableDialogUi.BUTTON_CONFIRM:       Play(scenario); break;
+             case SCR_ScenarioEntryHelper.BUTTON_PLAY:           Play(scenario); break;
+             case SCR_ScenarioEntryHelper.BUTTON_CONTINUE:       Continue(scenario); break;
+             case SCR_ScenarioEntryHelper.BUTTON_RESTART:        Restart(scenario); break;
+             case SCR_ScenarioEntryHelper.BUTTON_FIND_SERVERS:   Join(scenario); break;
+             case SCR_ScenarioEntryHelper.BUTTON_HOST:           Host(scenario); break;
+             case SCR_ScenarioEntryHelper.BUTTON_FAVORITE:       OnFavouriteButton(); break;
+         }
+     }
+
+     // CLICKS
+     //------------------------------------------------------------------------------------------------
+     protected void OnLineClickInteraction(float multiplier)
+     {
+
+         SCR_ContentBrowser_ScenarioLineComponent lineComp = m_ClickedLine;
+         if (!lineComp || !GetLineUnderCursor())
+             return;
+
+         switch (Math.Floor(multiplier))
+         {
+             case 1: OnLineClick(lineComp); break;
+             case 2: OnLineDoubleClick(lineComp); break;
+         }
+
+         m_ClickedLine = null;
+     }
+
+     //------------------------------------------------------------------------------------------------
+     protected void OnLineClick(SCR_ContentBrowser_ScenarioLineComponent lineComp)
+     {
+         if (!lineComp)
+             return;
+
+         MissionWorkshopItem scenario = lineComp.GetScenario();
+         if (!scenario)
+             return;
+
+         if (GetGame().GetInputManager().GetLastUsedInputDevice() == EInputDeviceType.MOUSE)
+         {
+             SCR_ScenarioConfirmationDialogUi scenarioConfirmationDialog = SCR_ScenarioDialogs.CreateScenarioConfirmationDialog(scenario, GetOnLineFavorite());
+             if (!scenarioConfirmationDialog)
+             {
+                 OnPlayInteraction(scenario);
+                 return;
+             }
+
+             scenarioConfirmationDialog.m_OnButtonPressed.Insert(OnConfirmationDialogButtonPressed);
+             scenarioConfirmationDialog.GetOnFavorite().Insert(SetFavorite);
+         }
+         else
+         {
+             OnPlayInteraction(scenario);
+         }
+     }
+
+     //------------------------------------------------------------------------------------------------
+     protected void OnLineDoubleClick(SCR_ContentBrowser_ScenarioLineComponent lineComp)
+     {
+         if (!lineComp)
+             return;
+
+         OnPlayInteraction(lineComp.GetScenario());
+     }
+
+     // BUTTONS
+     //------------------------------------------------------------------------------------------------
+     protected void OnFavouriteButton()
+     {
+         SetFavorite(GetSelectedScenario());
+         if (m_NavFavorite && GetSelectedLine())
+             m_NavFavorite.SetLabel(GetFavoriteLabel(GetSelectedScenario().IsFavorite()));
+     }
+
+     // INTERACTIONS
+     //------------------------------------------------------------------------------------------------
+     protected void OnPlayInteraction(MissionWorkshopItem scenario)
+     {
+         if (!SCR_ScenarioEntryHelper.IsReady(scenario))
+             return;
+
+         if (SCR_ScenarioEntryHelper.HasSave(scenario))
+             Continue(scenario);
+         else
+             Play(scenario);
+     }
+
+     //------------------------------------------------------------------------------------------------
+     protected void Play(MissionWorkshopItem scenario)
+     {
+         if (!scenario)
+             return;
+
+         SCR_WorkshopUiCommon.TryPlayScenario(scenario);
+     }
+
+     //------------------------------------------------------------------------------------------------
+     protected void Continue(MissionWorkshopItem scenario)
+     {
+         if (!scenario)
+             return;
+
+         if (m_Header && !m_Header.GetSaveFileName().IsEmpty())
+             GetGame().GetSaveManager().SetFileNameToLoad(m_Header);
+         else
+             GetGame().GetSaveManager().ResetFileNameToLoad();
+
+         SCR_WorkshopUiCommon.TryPlayScenario(scenario);
+     }
+
+     //------------------------------------------------------------------------------------------------
+     protected void Restart(MissionWorkshopItem scenario)
+     {
+         if (!scenario)
+             return;
+
+         m_SelectedScenario = scenario;
+         m_Header = SCR_MissionHeader.Cast(MissionHeader.ReadMissionHeader(scenario.Id()));
+
+         if (!SCR_ScenarioEntryHelper.HasSave(scenario))
+             return;
+
+         SCR_ConfigurableDialogUi dialog = SCR_CommonDialogs.CreateDialog("scenario_restart");
+         dialog.m_OnConfirm.Insert(OnRestartConfirmed);
+     }
+
+     //------------------------------------------------------------------------------------------------
+     protected void OnRestartConfirmed()
+     {
+         GetGame().GetSaveManager().ResetFileNameToLoad();
+         SCR_WorkshopUiCommon.TryPlayScenario(m_SelectedScenario);
+     }
+
+     //------------------------------------------------------------------------------------------------
+     protected void Join(MissionWorkshopItem scenario)
+     {
+         SCR_EScenarioEntryErrorState state = SCR_ScenarioEntryHelper.GetErrorState(scenario);
+         if (!scenario || !SCR_ScenarioEntryHelper.IsMultiplayer(scenario) || SCR_ScenarioEntryHelper.IsInErrorState(state))
+             return;
+
+         ServerBrowserMenuUI.OpenWithScenarioFilter(scenario);
+     }
+
+     //------------------------------------------------------------------------------------------------
+     protected void Host(MissionWorkshopItem scenario)
+     {
+         SCR_EScenarioEntryErrorState state = SCR_ScenarioEntryHelper.GetErrorState(scenario);
+         if (!scenario || !SCR_ScenarioEntryHelper.IsMultiplayer(scenario) || SCR_ScenarioEntryHelper.IsInErrorState(state))
+             return;
+
+         // Open server hosting dialog
+         ServerHostingUI dialog = SCR_CommonDialogs.CreateServerHostingDialog();
+
+         if (dialog)
+             dialog.SelectScenario(scenario);
+     }
+
+     //------------------------------------------------------------------------------------------------
+     protected void SetFavorite(MissionWorkshopItem scenario)
+     {
+         if (!scenario || !m_SelectedLine || m_SelectedLine.GetScenario() != scenario)
+             return;
+
+         bool isFavorite = !scenario.IsFavorite();
+
+         //Update the scenario
+         scenario.SetFavorite(isFavorite);
+
+         //Update the widgets
+         m_SelectedLine.NotifyScenarioUpdate();
+
+         //Delegate to update the dialog
+         if (m_OnLineFavorite)
+             m_OnLineFavorite.Invoke(isFavorite);
+     }
+
+     // ---- HELPERS ----
+     // Create lines for scenarios
+     //------------------------------------------------------------------------------------------------
+     protected bool CreateLines(array<MissionWorkshopItem> scenarios, Widget parent)
+     {
+         foreach (MissionWorkshopItem scenario : scenarios)
+         {
+             Widget w = GetGame().GetWorkspace().CreateWidgets(SCR_ContentBrowser_ScenarioLineWidgets.s_sLayout, parent);
+             if (!w)
+                 return false;
+
+             SCR_ContentBrowser_ScenarioLineComponent comp = SCR_ContentBrowser_ScenarioLineComponent.FindComponent(w);
+             if (!comp)
+                 return false;
+
+             comp.SetScenario(scenario);
+             m_aScenarioLines.Insert(comp);
+
+             comp.GetOnFavorite().Insert(OnLineFavorite);
+             comp.GetOnMouseInteractionButtonClicked().Insert(OnInteractionButtonPressed);
+             comp.GetOnFocus().Insert(OnLineFocus);
+             comp.GetOnFocusLost().Insert(OnLineFocusLost);
+         }
+
+         return true;
+     }
+
+     //------------------------------------------------------------------------------------------------
+     protected void InitWidgets();
+
+     //------------------------------------------------------------------------------------------------
+     // Inits workshop API according to current mode
+     protected void InitWorkshopApi()
+     {
+         // Scan offline items if needed
+         if (m_WorkshopApi.NeedScan())
+             m_WorkshopApi.ScanOfflineItems();
+     }
+
+     //------------------------------------------------------------------------------------------------
+     protected void UpdateSidePanel()
+     {
+         SCR_ContentBrowser_ScenarioLineComponent lineComp = GetSelectedLine();
+         if (!lineComp)
+             return;
+
+         MissionWorkshopItem scenario = lineComp.GetScenario();
+         if (scenario && m_ScenarioDetailsPanel)
+             m_ScenarioDetailsPanel.SetScenario(scenario);
+     }
+
+     //------------------------------------------------------------------------------------------------
+     protected void UpdateNavigationButtons(bool visible = true)
+     {
+         MissionWorkshopItem scenario = GetSelectedScenario();
+         SCR_ScenarioEntryHelper.UpdateInputButtons(scenario, m_aRightFooterButtons, visible);
+
+         if (m_NavFavorite)
+         {
+             m_NavFavorite.SetVisible(visible, false);
+             if (visible)
+                 m_NavFavorite.SetLabel(GetFavoriteLabel(GetSelectedScenario().IsFavorite()));
+         }
+     }
+
+     //------------------------------------------------------------------------------------------------
+     protected string GetFavoriteLabel(bool isFavorite)
+     {
+         if (isFavorite)
+             return UIConstants.FAVORITE_LABEL_REMOVE;
+         else
+             return UIConstants.FAVORITE_LABEL_ADD;
+     }
+
+     //------------------------------------------------------------------------------------------------
+     protected SCR_ContentBrowser_ScenarioLineComponent GetSelectedLine()
+     {
+         // We are not over a line, use currently focused line
+         Widget wfocused = GetGame().GetWorkspace().GetFocusedWidget();
+         SCR_ContentBrowser_ScenarioLineComponent comp;
+         if (wfocused)
+             comp = SCR_ContentBrowser_ScenarioLineComponent.Cast(wfocused.FindHandler(SCR_ContentBrowser_ScenarioLineComponent));
+
+         EInputDeviceType inputDevice = GetGame().GetInputManager().GetLastUsedInputDevice();
+         bool isCursorOnInnerButton = m_SelectedLine && m_SelectedLine.IsInnerButtonInteraction();
+
+         if (inputDevice == EInputDeviceType.MOUSE && (GetLineUnderCursor() || isCursorOnInnerButton))
+             return m_SelectedLine;
+         else
+             return comp;
+     }
+
+     //------------------------------------------------------------------------------------------------
+     protected SCR_ContentBrowser_ScenarioLineComponent GetLineUnderCursor()
+     {
+         // Note that this returns null if the cursor is on a button nested inside the line main button
+
+         Widget w = WidgetManager.GetWidgetUnderCursor();
+
+         if (!w)
+             return null;
+
+         return SCR_ContentBrowser_ScenarioLineComponent.Cast(w.FindHandler(SCR_ContentBrowser_ScenarioLineComponent));
+     }
+
+     //------------------------------------------------------------------------------------------------
+     protected MissionWorkshopItem GetSelectedScenario()
+     {
+         SCR_ContentBrowser_ScenarioLineComponent comp = GetSelectedLine();
+
+         if (!comp)
+             return null;
+
+         return comp.GetScenario();
+     }
+
+     // ---- PUBLIC ----
+     //------------------------------------------------------------------------------------------------
+     ScriptInvokerBool GetOnLineFavorite()
+     {
+         if (!m_OnLineFavorite)
+             m_OnLineFavorite = new ScriptInvokerBool();
+
+         return m_OnLineFavorite;
+     }
+ }

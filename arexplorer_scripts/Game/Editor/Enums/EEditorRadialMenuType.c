@@ -1,0 +1,6 @@
+
+ enum EEditorRadialMenuType
+ {
+     ACTIONS,
+     COMMANDS
+ };

@@ -1,0 +1,16 @@
+ /*
+ ===========================================
+ Do not modify, this script is generated
+ ===========================================
+ */
+
+ class RadioBroadcastComponentClass: GameComponentClass
+ {
+ }
+
+ class RadioBroadcastComponent: GameComponent
+ {
+     proto external bool GetState();
+     // Enable / disabling of radio
+     proto external void EnableRadio(bool enable);
+ }

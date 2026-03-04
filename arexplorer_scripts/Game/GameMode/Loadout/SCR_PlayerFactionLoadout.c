@@ -1,0 +1,23 @@
+ [BaseContainerProps(configRoot: true), BaseContainerCustomTitleField("m_sLoadoutName")]
+ class SCR_FactionPlayerLoadout : SCR_PlayerLoadout
+ {
+     [Attribute("", UIWidgets.EditBox, "")]
+     string m_sAffiliatedFaction;
+
+     //------------------------------------------------------------------------------------------------
+     FactionKey GetFactionKey()
+     {
+         return m_sAffiliatedFaction;
+     }
+
+     //------------------------------------------------------------------------------------------------
+     override void OnLoadoutSpawned(GenericEntity pOwner, int playerId)
+     {
+         if (pOwner)
+         {
+             FactionAffiliationComponent comp = FactionAffiliationComponent.Cast(pOwner.FindComponent(FactionAffiliationComponent));
+             if (comp)
+                 comp.SetAffiliatedFactionByKey(m_sAffiliatedFaction);
+         }
+     }
+ }

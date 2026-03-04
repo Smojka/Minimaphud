@@ -1,0 +1,25 @@
+
+ enum EEditableEntityState
+ {
+     UNLOCKED                = 1 << 0,
+     VISIBLE                 = 1 << 1,
+     RENDERED                = 1 << 2,
+     ACTIVE                  = 1 << 3,
+     INTERACTIVE             = 1 << 4,
+     SELECTED                = 1 << 5,
+     FOCUSED                 = 1 << 6,
+     HOVER                   = 1 << 7,
+     PLAYER                  = 1 << 8,
+     COMPATIBLE_SLOT         = 1 << 9,
+     CURRENT_LAYER           = 1 << 10,
+     PREVIEW                 = 1 << 11,
+     EDITED                  = 1 << 12,
+     PINGED                  = 1 << 13,
+     EXTENDABLE              = 1 << 14,
+     DESTROYED               = 1 << 15,
+     COMMANDED               = 1 << 16,
+     HIGHLIGHTED             = 1 << 17,
+     CURRENT_LAYER_CHILDREN  = 1 << 18,
+     AUTONOMOUS              = 1 << 19,
+     BASE_BUILDING           = 1 << 20,
+ };

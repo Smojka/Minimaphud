@@ -1,0 +1,13 @@
+
+ [BaseContainerProps(configRoot: true), BaseContainerCustomCheckIntTitleField("m_bEnabled", "LoadoutData", "DISABLED - LoadoutData", 1)]
+ class SCR_EntityCatalogLoadoutData: SCR_BaseEntityCatalogData
+ {
+     [Attribute("50", desc: "Supply cost for players to spawn with this loadout. Cost will be multiplied with Arsenal Spawn cost multiplier. The system will get the campaign cost if no SCR_EntityCatalogLoadoutData is assigned", params: "0, inf")]
+     protected float m_fSpawnSupplyCost;
+
+     //------------------------------------------------------------------------------------------------
+  float GetLoadoutSpawnCost()
+     {
+         return m_fSpawnSupplyCost;
+     }
+ };
