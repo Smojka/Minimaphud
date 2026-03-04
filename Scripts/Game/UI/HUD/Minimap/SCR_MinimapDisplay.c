@@ -177,7 +177,7 @@ class SCR_MinimapDisplay : SCR_InfoDisplay
 		mapEntity.OpenMap(m_MapConfig);
 
 		// Assign the MapWidget for rendering
-		if (m_wMapWidget || m_wRoot)
+		if (m_wRoot)
 		{
 			Widget mapWidget = m_wRoot.FindAnyWidget("MapWidget");
 			if (mapWidget)

@@ -54,6 +54,12 @@ class SCR_MinimapMarkerManager
 		if (!player)
 			return;
 
+		// Throttle marker updates for performance
+		m_fTimeSinceLastUpdate += System.GetFrameTimeS();
+		if (m_fTimeSinceLastUpdate < MARKER_UPDATE_INTERVAL)
+			return;
+		m_fTimeSinceLastUpdate = 0;
+
 		// Get the map entity for marker access
 		SCR_MapEntity mapEntity = SCR_MapEntity.GetMapInstance();
 		if (!mapEntity)
