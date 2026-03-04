@@ -1,0 +1,85 @@
+OverlayWidgetClass "{DE15F59659B8CF68}" {
+ Name "root"
+ Slot FrameWidgetSlot "{DE15F59659B8CF69}" {
+  Anchor 0.5 1 0.5 1
+  Offset -128 -20 128 -20
+  UseAnchors 1
+ }
+ children {
+  FrameWidgetClass "{DE15F59659B8CF6A}" {
+   Name "MinimapFrame"
+   Slot OverlayWidgetSlot "{DE15F59659B8CF6B}" {
+    HorizontalAlign 1
+    VerticalAlign 2
+   }
+   Size 256 256
+   children {
+    SizeLayoutWidgetClass "{DE15F59659B8CF6C}" {
+     Name "MapContainer"
+     Slot FrameWidgetSlot "{DE15F59659B8CF6D}" {
+      Anchor 0 0 1 1
+      UseAnchors 1
+     }
+     children {
+      MapWidgetClass "{DE15F59659B8CF6E}" {
+       Name "MapWidget"
+       Slot SizeLayoutWidgetSlot "{DE15F59659B8CF6F}" {
+        HorizontalAlign 1
+        VerticalAlign 1
+        Fill 1
+       }
+      }
+     }
+    }
+    ImageWidgetClass "{DE15F59659B8CF70}" {
+     Name "CircleMask"
+     Slot FrameWidgetSlot "{DE15F59659B8CF71}" {
+      Anchor 0 0 1 1
+      UseAnchors 1
+     }
+     Color 0 0 0 1
+     Image "{2BBBE2C9AC2A5FF7}UI/Textures/HUD/MinimapCircleMask.edds"
+    }
+    ImageWidgetClass "{DE15F59659B8CF72}" {
+     Name "CircleBorder"
+     Slot FrameWidgetSlot "{DE15F59659B8CF73}" {
+      Anchor 0 0 1 1
+      UseAnchors 1
+     }
+     Color 0.2 0.2 0.2 0.8
+     Image "{3BBBE2C9AC2A5FF7}UI/Textures/HUD/MinimapCircleBorder.edds"
+    }
+    OverlayWidgetClass "{DE15F59659B8CF74}" {
+     Name "MarkerOverlay"
+     Slot FrameWidgetSlot "{DE15F59659B8CF75}" {
+      Anchor 0 0 1 1
+      UseAnchors 1
+     }
+    }
+    ImageWidgetClass "{DE15F59659B8CF76}" {
+     Name "PlayerIcon"
+     Slot FrameWidgetSlot "{DE15F59659B8CF77}" {
+      Anchor 0.5 0.5 0.5 0.5
+      Offset -8 -8 8 8
+      UseAnchors 1
+     }
+     Color 1 1 1 1
+     Image "{4BBBE2C9AC2A5FF7}UI/Textures/HUD/MinimapPlayerArrow.edds"
+    }
+    TextWidgetClass "{DE15F59659B8CF78}" {
+     Name "CompassText"
+     Slot FrameWidgetSlot "{DE15F59659B8CF79}" {
+      Anchor 0.5 0 0.5 0
+      Offset -20 4 20 20
+      UseAnchors 1
+     }
+     Text "N"
+     Color 1 1 1 0.9
+     Font "{AB3B036660E1B109}UI/Fonts/RobotoCondensed/RobotoCondensed_Bold.fnt"
+     FontSize 14
+     HorizontalAlign 1
+    }
+   }
+  }
+ }
+}
