@@ -53,3 +53,33 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# =============================================================================
+# Arma Reforger — vanilla-data/ klasörü kuralları
+# =============================================================================
+# Binary varlıklar (çok büyük, telif hakkı, AI için gereksiz) → YOK
+vanilla-data/ArmaReforger/**/*.xob
+vanilla-data/ArmaReforger/**/*.edds
+vanilla-data/ArmaReforger/**/*.emat
+vanilla-data/ArmaReforger/**/*.pak
+vanilla-data/ArmaReforger/**/*.pbo
+vanilla-data/ArmaReforger/**/*.png
+vanilla-data/ArmaReforger/**/*.jpg
+vanilla-data/ArmaReforger/**/*.jpeg
+vanilla-data/ArmaReforger/**/*.bmp
+vanilla-data/ArmaReforger/**/*.tga
+vanilla-data/ArmaReforger/**/*.dds
+vanilla-data/ArmaReforger/**/*.ogg
+vanilla-data/ArmaReforger/**/*.wav
+vanilla-data/ArmaReforger/**/*.wem
+vanilla-data/ArmaReforger/**/*.bnk
+
+# Metin tabanlı vanilla dosyalar (AI için kritik) → REPODA KALIR
+# .c  .et  .layout  .conf  .ent  .layer  .gproj  .meta
+# Bu dosyalar varsayılan olarak GİTİGNORE DEĞİL — commit edilebilir.
+
+# Arma Reforger Workbench geçici/önbellek dosyaları → YOK
+*.~
+*.bak
+Workbench.log
+.workbench/

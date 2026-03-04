@@ -1,0 +1,47 @@
+WorkbenchComponent {
+ class "SizeLayoutWidget"
+ name "Root"
+ widthScale 1.0
+ heightScale 1.0
+ object {
+  SizeLayoutWidget "MinimapContainer" {
+   horizontalAlign LayoutHAlign.Right
+   verticalAlign LayoutVAlign.Bottom
+   left 16
+   top 16
+   right 16
+   bottom 16
+   width 200
+   height 200
+   object {
+    ImageWidget "MinimapImage" {
+     color "1 1 1 0.85"
+     widthScale 1.0
+     heightScale 1.0
+    }
+    ImageWidget "PlayerIcon" {
+     image "{A1B2C3D4E5F60010}UI/Textures/player_icon.edds"
+     color "1 1 1 1"
+     width 12
+     height 12
+    }
+   }
+  }
+  HorizontalLayoutWidget "CompassBar" {
+   horizontalAlign LayoutHAlign.Right
+   verticalAlign LayoutVAlign.Bottom
+   left 16
+   top 16
+   right 16
+   bottom 226
+   object {
+    TextWidget "CompassText" {
+     text "0°"
+     font "{3DED3F8CD73FB5C2}UI/Fonts/Bebas/Bebas.fnt"
+     color "1 1 1 1"
+     horizontalAlign LayoutHAlign.Center
+    }
+   }
+  }
+ }
+}
