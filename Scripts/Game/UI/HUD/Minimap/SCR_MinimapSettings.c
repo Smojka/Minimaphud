@@ -4,8 +4,7 @@
 // Allows players to adjust zoom, opacity, rotation, and other minimap options
 
 // Settings module that registers with the game settings system
-[BaseContainerProps(), SCR_BaseContainerLocalizedTitleField("m_sModuleName")]
-class SCR_MinimapSettingsModule : SCR_GameplaySettingsModule
+class SCR_MinimapSettingsModule : ModuleGameSettings
 {
 	[Attribute("0.5", UIWidgets.Slider, desc: "Minimap Zoom Level", params: "0.1 5.0 0.1")]
 	float m_fZoomLevel;

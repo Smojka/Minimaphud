@@ -9,7 +9,7 @@
 //   - Adjustable zoom level
 //   - Shows map markers (capture points, objectives)
 
-class SCR_MinimapDisplay : SCR_InfoDisplay
+class SCR_MinimapDisplay : SCR_InfoDisplayExtended
 {
 	// Static reference for global access
 	static SCR_MinimapDisplay s_Instance;
@@ -31,9 +31,6 @@ class SCR_MinimapDisplay : SCR_InfoDisplay
 	protected bool m_bMapInitialized;
 	protected bool m_bFullMapOpen;
 	protected float m_fLastUpdateTime;
-
-	// Cached references
-	protected MenuManager m_MenuManager;
 
 	// Marker manager
 	protected ref SCR_MinimapMarkerManager m_MarkerManager;
@@ -91,7 +88,7 @@ class SCR_MinimapDisplay : SCR_InfoDisplay
 			SCR_MapEntity.GetOnMapClose().Insert(OnFullMapClosed);
 
 		// Register settings change listener
-		GetGame().OnUserSettingsChangedInvoker().Insert(OnSettingsChanged);
+		GetGame().OnUserSettingsChangedInvoker().Insert(OnMinimapSettingsChanged);
 
 		// Initialize the minimap with delay to ensure everything is loaded
 		GetGame().GetCallqueue().CallLater(InitMinimap, 500, false);
@@ -107,7 +104,7 @@ class SCR_MinimapDisplay : SCR_InfoDisplay
 		if (SCR_MapEntity.GetOnMapClose())
 			SCR_MapEntity.GetOnMapClose().Remove(OnFullMapClosed);
 
-		GetGame().OnUserSettingsChangedInvoker().Remove(OnSettingsChanged);
+		GetGame().OnUserSettingsChangedInvoker().Remove(OnMinimapSettingsChanged);
 
 		GetGame().GetCallqueue().Remove(InitMinimap);
 		GetGame().GetCallqueue().Remove(MinimapUpdateLoop);
@@ -360,7 +357,7 @@ class SCR_MinimapDisplay : SCR_InfoDisplay
 	}
 
 	//------------------------------------------------------------------------------------------------
-	protected void OnSettingsChanged()
+	protected void OnMinimapSettingsChanged()
 	{
 		m_Config.LoadSettings();
 	}
